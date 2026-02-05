@@ -35,14 +35,45 @@ df = load_data()
 vectorizer, model_xgb, model_rf = load_models()
 
 # =====================================================
-# VALIDASI KOLOM (ANTI ERROR)
+# AUTO DETEKSI KOLOM (100% AMAN)
 # =====================================================
-required_cols = ["content", "score", "sentimen", "sentimen_encoded"]
-for col in required_cols:
-    if col not in df.columns:
-        st.error(f"Kolom '{col}' tidak ditemukan di dataset")
-        st.write("Kolom tersedia:", df.columns)
-        st.stop()
+def detect_column(candidates, df_columns):
+    for col in candidates:
+        if col in df_columns:
+            return col
+    return None
+
+text_col = detect_column(
+    ["content", "ulasan", "review", "text", "komentar", "review_text", "content_clean"],
+    df.columns
+)
+
+score_col = detect_column(
+    ["score", "rating", "stars", "nilai"],
+    df.columns
+)
+
+sentiment_col = detect_column(
+    ["sentimen", "label", "kategori", "sentiment"],
+    df.columns
+)
+
+sentiment_enc_col = detect_column(
+    ["sentimen_encoded", "label_encoded", "sentiment_encoded", "y"],
+    df.columns
+)
+
+missing = []
+if text_col is None: missing.append("kolom teks ulasan")
+if score_col is None: missing.append("kolom rating")
+if sentiment_col is None: missing.append("kolom sentimen")
+if sentiment_enc_col is None: missing.append("kolom sentimen numerik")
+
+if missing:
+    st.error("Dataset belum memenuhi struktur dashboard")
+    st.write("Yang tidak ditemukan:", missing)
+    st.write("Kolom tersedia:", list(df.columns))
+    st.stop()
 
 # =====================================================
 # JUDUL
@@ -64,7 +95,7 @@ with col1:
     st.metric("Total Ulasan Dianalisis", f"{len(df)} Data")
 
 with col2:
-    sentiment_counts = df["sentimen"].value_counts()
+    sentiment_counts = df[sentiment_col].value_counts()
     fig, ax = plt.subplots()
     ax.pie(
         sentiment_counts,
@@ -110,24 +141,17 @@ model_choice = st.selectbox(
     ["XGBoost", "Random Forest"]
 )
 
-y_true = df["sentimen_encoded"]
-X_tfidf = vectorizer.transform(df["content"].astype(str))
+y_true = df[sentiment_enc_col]
+X_tfidf = vectorizer.transform(df[text_col].astype(str))
 
-if model_choice == "XGBoost":
-    y_pred = model_xgb.predict(X_tfidf)
-else:
-    y_pred = model_rf.predict(X_tfidf)
+y_pred = model_xgb.predict(X_tfidf) if model_choice == "XGBoost" else model_rf.predict(X_tfidf)
 
-labels = [2, 1, 0]
-label_names = ["Puas", "Netral", "Tidak Puas"]
+labels = sorted(y_true.unique(), reverse=True)
 
 cm = confusion_matrix(y_true, y_pred, labels=labels)
 
 fig, ax = plt.subplots()
-disp = ConfusionMatrixDisplay(
-    confusion_matrix=cm,
-    display_labels=label_names
-)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm)
 disp.plot(ax=ax, cmap="Blues", values_format="d")
 ax.set_title(f"Confusion Matrix {model_choice}")
 st.pyplot(fig)
@@ -139,11 +163,11 @@ st.header("☁️ Word Cloud Berdasarkan Sentimen")
 
 sentiment_option = st.selectbox(
     "Pilih Sentimen:",
-    sorted(df["sentimen"].unique())
+    sorted(df[sentiment_col].unique())
 )
 
 text_data = " ".join(
-    df[df["sentimen"] == sentiment_option]["content"].astype(str)
+    df[df[sentiment_col] == sentiment_option][text_col].astype(str)
 )
 
 if text_data.strip():
@@ -167,13 +191,13 @@ st.header("📋 Daftar Ulasan Terklasifikasi")
 
 filter_sentiment = st.selectbox(
     "Filter Sentimen:",
-    ["Semua"] + sorted(df["sentimen"].unique())
+    ["Semua"] + sorted(df[sentiment_col].unique())
 )
 
-df_show = df if filter_sentiment == "Semua" else df[df["sentimen"] == filter_sentiment]
+df_show = df if filter_sentiment == "Semua" else df[df[sentiment_col] == filter_sentiment]
 
 st.dataframe(
-    df_show[["content", "score", "sentimen"]],
+    df_show[[text_col, score_col, sentiment_col]],
     use_container_width=True
 )
 
