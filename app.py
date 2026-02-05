@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import joblib
 
@@ -36,15 +35,23 @@ df = load_data()
 vectorizer, model_xgb, model_rf = load_models()
 
 # =====================================================
+# VALIDASI KOLOM (ANTI ERROR)
+# =====================================================
+required_cols = ["content", "score", "sentimen", "sentimen_encoded"]
+for col in required_cols:
+    if col not in df.columns:
+        st.error(f"Kolom '{col}' tidak ditemukan di dataset")
+        st.write("Kolom tersedia:", df.columns)
+        st.stop()
+
+# =====================================================
 # JUDUL
 # =====================================================
 st.title("📊 Dashboard Analisis Sentimen Ulasan Aplikasi Maxim")
-st.markdown(
-    """
-    Dashboard ini menyajikan hasil analisis sentimen ulasan pengguna aplikasi **Maxim**
-    menggunakan algoritma **XGBoost** dan **Random Forest**.
-    """
-)
+st.markdown("""
+Dashboard ini menyajikan hasil analisis sentimen ulasan pengguna aplikasi **Maxim**
+menggunakan algoritma **XGBoost** dan **Random Forest**.
+""")
 
 # =====================================================
 # RINGKASAN STATISTIK
@@ -73,7 +80,6 @@ with col2:
 # =====================================================
 st.header("📊 Perbandingan Performa Model")
 
-# GANTI NILAI SESUAI HASIL PENELITIAN KAMU
 model_metrics = pd.DataFrame({
     "Model": ["XGBoost", "Random Forest"],
     "Akurasi": [0.87, 0.84],
@@ -95,7 +101,7 @@ ax.set_title(f"Perbandingan {metric_option}")
 st.pyplot(fig)
 
 # =====================================================
-# CONFUSION MATRIX (REAL DARI MODEL)
+# CONFUSION MATRIX
 # =====================================================
 st.header("📉 Confusion Matrix")
 
@@ -104,19 +110,15 @@ model_choice = st.selectbox(
     ["XGBoost", "Random Forest"]
 )
 
-# Label asli
 y_true = df["sentimen_encoded"]
-
-# Transform teks
 X_tfidf = vectorizer.transform(df["content"].astype(str))
 
-# Prediksi
 if model_choice == "XGBoost":
     y_pred = model_xgb.predict(X_tfidf)
 else:
     y_pred = model_rf.predict(X_tfidf)
 
-labels = [2, 1, 0]  # SESUAIKAN JIKA URUTAN LABEL BERBEDA
+labels = [2, 1, 0]
 label_names = ["Puas", "Netral", "Tidak Puas"]
 
 cm = confusion_matrix(y_true, y_pred, labels=labels)
@@ -137,19 +139,18 @@ st.header("☁️ Word Cloud Berdasarkan Sentimen")
 
 sentiment_option = st.selectbox(
     "Pilih Sentimen:",
-    df["sentimen"].unique()
+    sorted(df["sentimen"].unique())
 )
 
 text_data = " ".join(
     df[df["sentimen"] == sentiment_option]["content"].astype(str)
 )
 
-if text_data.strip() != "":
+if text_data.strip():
     wordcloud = WordCloud(
         width=800,
         height=400,
-        background_color="white",
-        max_words=100
+        background_color="white"
     ).generate(text_data)
 
     fig, ax = plt.subplots(figsize=(10, 5))
@@ -160,19 +161,16 @@ else:
     st.warning("Tidak ada data untuk sentimen ini.")
 
 # =====================================================
-# TABEL ULASAN TERKLASIFIKASI
+# TABEL ULASAN
 # =====================================================
 st.header("📋 Daftar Ulasan Terklasifikasi")
 
 filter_sentiment = st.selectbox(
     "Filter Sentimen:",
-    ["Semua"] + list(df["sentimen"].unique())
+    ["Semua"] + sorted(df["sentimen"].unique())
 )
 
-if filter_sentiment != "Semua":
-    df_show = df[df["sentimen"] == filter_sentiment]
-else:
-    df_show = df
+df_show = df if filter_sentiment == "Semua" else df[df["sentimen"] == filter_sentiment]
 
 st.dataframe(
     df_show[["content", "score", "sentimen"]],
