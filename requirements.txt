@@ -2,8 +2,8 @@ streamlit
 pandas
 numpy
 matplotlib
-scikit-learn
 joblib
 wordcloud
 xgboost
+
 
